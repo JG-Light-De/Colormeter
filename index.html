@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Colormeter">
+<meta name="theme-color" content="#0b0b0d">
+<title>Colormeter</title>
+<style>
+:root{
+  --bg:#0b0b0d;--panel:#16161a;--line:#2a2a31;--text:#ececf0;--muted:#8d8d98;
+  --accent:#ffb020;--ok:#3ecf7a;--bad:#ff5a5a;--r:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+body{padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 16px)}
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px}
+header h1{font-size:17px;margin:0;letter-spacing:.02em}
+header h1 span{color:var(--accent)}
+#cam{position:relative;margin:0 16px;aspect-ratio:4/3;background:#000;border-radius:var(--r);overflow:hidden}
+#v{width:100%;height:100%;object-fit:cover;display:block}
+#ring{position:absolute;left:50%;top:50%;border:2px solid #fff;border-radius:50%;
+  transform:translate(-50%,-50%);box-shadow:0 0 0 1px #000,0 0 0 9999px rgba(0,0,0,.25);pointer-events:none;display:none}
+#warn{position:absolute;left:10px;right:10px;bottom:10px;padding:6px 10px;border-radius:8px;
+  background:rgba(255,90,90,.9);color:#fff;font-size:13px;font-weight:600;text-align:center;display:none}
+#frozenTag{position:absolute;top:10px;left:10px;padding:3px 8px;border-radius:6px;background:var(--accent);
+  color:#000;font-size:12px;font-weight:700;display:none}
+#start{position:absolute;inset:0;margin:auto;width:70%;height:54px;border:0;border-radius:12px;
+  background:var(--accent);color:#000;font-size:16px;font-weight:700}
+.row{display:flex;gap:8px;align-items:center}
+.ctrl{margin:10px 16px 0}
+.ctrl label{font-size:12px;color:var(--muted);min-width:70px}
+input[type=range]{flex:1;accent-color:var(--accent)}
+button.b{flex:1;min-height:44px;border:1px solid var(--line);border-radius:10px;background:var(--panel);
+  color:var(--text);font-size:14px;font-weight:600}
+button.b.pri{background:var(--accent);border-color:var(--accent);color:#000}
+button.b.on{border-color:var(--accent);color:var(--accent)}
+button.b:disabled{opacity:.4}
+#tabs{display:flex;margin:14px 16px 0;background:var(--panel);border-radius:10px;padding:3px}
+#tabs button{flex:1;border:0;background:none;color:var(--muted);padding:9px 4px;border-radius:8px;font-size:14px;font-weight:600}
+#tabs button.on{background:#2a2a31;color:var(--text)}
+.card{margin:12px 16px 0;padding:14px;background:var(--panel);border-radius:var(--r)}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px;font-weight:600}
+.sw{width:64px;height:64px;border-radius:10px;border:1px solid var(--line);flex:none}
+.sw.big{width:100%;height:56px}
+.grid{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:4px 10px;font-variant-numeric:tabular-nums;font-size:14px;flex:1}
+.grid .h{color:var(--muted);font-size:12px}
+.grid .k{color:var(--muted);font-size:12px;align-self:center}
+.big{font-size:20px;font-weight:700}
+.hint{font-size:13px;color:var(--muted);margin-top:8px}
+.verdict{font-size:17px;font-weight:700;margin:10px 0 4px}
+.verdict.ok{color:var(--ok)}
+.verdict.bad{color:var(--accent)}
+.pair{display:flex;gap:8px}
+.pair>div{flex:1;text-align:center;font-size:12px;color:var(--muted)}
+.pair .sw{width:100%;height:56px;margin-bottom:4px}
+.bars{margin-top:10px}
+.bar{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:13px;font-variant-numeric:tabular-nums}
+.bar .n{width:40px;color:var(--muted)}
+.bar .t{flex:1;height:8px;background:#222228;border-radius:4px;position:relative}
+.bar .t i{position:absolute;top:0;bottom:0;left:50%;border-radius:4px}
+.bar .t:after{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:#555}
+.bar .val{width:58px;text-align:right}
+.hidden{display:none!important}
+#msg{margin:10px 16px 0;font-size:13px;color:var(--bad)}
+</style>
+</head>
+<body>
+<header><h1>Color<span>meter</span></h1><span id="status" class="hint" style="margin:0"></span></header>
+
+<div id="cam">
+  <video id="v" playsinline muted autoplay></video>
+  <div id="ring"></div>
+  <div id="frozenTag">EINGEFROREN</div>
+  <div id="warn"></div>
+  <button id="start">Kamera starten</button>
+</div>
+<div id="msg"></div>
+
+<div class="ctrl row">
+  <label for="rad">Messkreis</label>
+  <input id="rad" type="range" min="2" max="30" value="8">
+</div>
+<div class="ctrl row hidden" id="expRow">
+  <label for="exp">Belichtung</label>
+  <input id="exp" type="range">
+</div>
+<div class="ctrl row">
+  <button class="b" id="freeze">Einfrieren</button>
+  <button class="b hidden" id="lock">Kamera sperren</button>
+</div>
+
+<div id="tabs">
+  <button data-m="cmp" class="on">Scheinwerfer vergleichen</button>
+  <button data-m="scan">Deko scannen</button>
+</div>
+
+<!-- Vergleichen -->
+<section id="m-cmp">
+  <div class="card">
+    <h2>Referenz (Scheinwerfer A)</h2>
+    <div class="row">
+      <button class="b pri" id="setA">Aktuellen Wert als A speichern</button>
+      <button class="b" id="clrA" style="flex:0 0 80px">Löschen</button>
+    </div>
+    <div class="hint">Beide Scheinwerfer nacheinander auf dieselbe weiße Fläche richten, gleiche Stelle messen und das Handy dabei möglichst nicht bewegen.</div>
+  </div>
+  <div class="card" id="cmpOut">
+    <div class="pair">
+      <div><div class="sw" id="swA"></div>A (Referenz)</div>
+      <div><div class="sw" id="swB"></div>B (aktuell)</div>
+    </div>
+    <div class="verdict" id="verdict">Noch keine Referenz gespeichert</div>
+    <div class="hint" id="cmpText"></div>
+    <div class="bars" id="bars"></div>
+    <div class="hint" id="corr"></div>
+    <div class="hint" id="bright"></div>
+  </div>
+</section>
+
+<!-- Scannen -->
+<section id="m-scan" class="hidden">
+  <div class="card">
+    <h2>Weißreferenz</h2>
+    <div class="row">
+      <button class="b pri" id="setW">Weißes Blatt messen</button>
+      <button class="b" id="clrW" style="flex:0 0 80px">Löschen</button>
+    </div>
+    <div class="hint" id="wState"></div>
+  </div>
+  <div class="card">
+    <h2>Gemessene Farbe</h2>
+    <div class="row" style="align-items:flex-start;gap:14px">
+      <div class="sw" id="swS"></div>
+      <div class="grid">
+        <span></span><span class="h">R</span><span class="h">G</span><span class="h">B</span>
+        <span class="k">0–255</span><span id="s255r"></span><span id="s255g"></span><span id="s255b"></span>
+        <span class="k">C M Y %</span><span id="scmyc"></span><span id="scmym"></span><span id="scmyy"></span>
+      </div>
+    </div>
+    <div class="hint" id="hex"></div>
+  </div>
+  <div class="card">
+    <h2>Anhaltspunkt fürs Pult</h2>
+    <div class="grid" style="grid-template-columns:auto 1fr 1fr 1fr">
+      <span></span><span class="h">Rot</span><span class="h">Grün</span><span class="h">Blau</span>
+      <span class="k">RGB-Mix</span><span class="big" id="pr"></span><span class="big" id="pg"></span><span class="big" id="pb"></span>
+      <span></span><span class="h">Cyan</span><span class="h">Magenta</span><span class="h">Gelb</span>
+      <span class="k">CMY-Mix</span><span class="big" id="pc"></span><span class="big" id="pm"></span><span class="big" id="py"></span>
+    </div>
+    <div class="hint">Stärkster Kanal = 100 %. Nur ein Startwert: Jeder Scheinwerfertyp mischt anders, am Ende nach Auge nachstellen.</div>
+  </div>
+</section>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const v = $('#v');
+const cv = document.createElement('canvas');
+const cx = cv.getContext('2d', { willReadFrequently: true });
+const NAMES = ['Rot', 'Grün', 'Blau'];
+const COLORS = ['#ff5a5a', '#3ecf7a', '#4f8dff'];
+
+// sRGB <-> linear
+const LUT = new Float32Array(256);
+for (let i = 0; i < 256; i++) { const c = i / 255; LUT[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+const enc = l => { l = Math.max(0, Math.min(1, l)); const c = l <= 0.0031308 ? l * 12.92 : 1.055 * Math.pow(l, 1 / 2.4) - 0.055; return Math.round(c * 255); };
+const rgbCss = a => `rgb(${a[0]},${a[1]},${a[2]})`;
+const pct = x => Math.round(x) + ' %';
+
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+  set(k, val) { try { val == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(val)); } catch (e) {} }
+};
+
+let track = null, avg = null, frozen = false, mode = 'cmp', clipFrac = 0, lastUi = 0, locked = false;
+let white = store.get('cm_white'), refA = store.get('cm_refA');
+
+function msg(t) { $('#msg').textContent = t || ''; }
+
+async function start() {
+  msg('');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    msg('Kein Kamerazugriff möglich. Die Seite muss über https geöffnet werden (nicht als lokale Datei).');
+    return;
+  }
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false
+    });
+    v.srcObject = s;
+    await v.play();
+    track = s.getVideoTracks()[0];
+    $('#start').classList.add('hidden');
+    $('#ring').style.display = 'block';
+    setupControls();
+    requestAnimationFrame(loop);
+  } catch (e) {
+    $('#start').textContent = 'Erneut versuchen';
+    msg('Kamera wurde nicht freigegeben. In Safari: aA-Symbol in der Adresszeile → Website-Einstellungen → Kamera erlauben.');
+  }
+}
+
+function setupControls() {
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  if (caps.exposureCompensation && caps.exposureCompensation.max > caps.exposureCompensation.min) {
+    const r = $('#exp'), ec = caps.exposureCompensation;
+    r.min = ec.min; r.max = ec.max; r.step = ec.step || 0.1;
+    const cur = track.getSettings ? track.getSettings().exposureCompensation : 0;
+    r.value = cur ?? 0;
+    $('#expRow').classList.remove('hidden');
+    r.oninput = () => track.applyConstraints({ advanced: [{ exposureCompensation: parseFloat(r.value) }] }).catch(() => {});
+  }
+  const canLockExp = Array.isArray(caps.exposureMode) && caps.exposureMode.includes('manual');
+  const canLockWb = Array.isArray(caps.whiteBalanceMode) && caps.whiteBalanceMode.includes('manual');
+  if (canLockExp || canLockWb) {
+    const b = $('#lock');
+    b.classList.remove('hidden');
+    b.onclick = async () => {
+      locked = !locked;
+      const c = {};
+      if (canLockExp) c.exposureMode = locked ? 'manual' : 'continuous';
+      if (canLockWb) c.whiteBalanceMode = locked ? 'manual' : 'continuous';
+      try { await track.applyConstraints({ advanced: [c] }); }
+      catch (e) { locked = false; msg('Sperren wird von diesem Gerät nicht unterstützt.'); }
+      b.classList.toggle('on', locked);
+      b.textContent = locked ? 'Kamera gesperrt' : 'Kamera sperren';
+    };
+  }
+  $('#status').textContent = (canLockExp || canLockWb) ? '' : 'Automatik aktiv';
+}
+
+function sample() {
+  const vw = v.videoWidth, vh = v.videoHeight;
+  if (!vw) return;
+  const frac = parseInt($('#rad').value, 10) / 100;
+  const r = Math.max(4, Math.round(Math.min(vw, vh) * frac));
+  const S = Math.min(64, 2 * r);
+  cv.width = cv.height = S;
+  cx.drawImage(v, vw / 2 - r, vh / 2 - r, 2 * r, 2 * r, 0, 0, S, S);
+  const d = cx.getImageData(0, 0, S, S).data;
+  const c = S / 2, rr = c * c;
+  let sr = 0, sg = 0, sb = 0, n = 0, clip = 0;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = x + 0.5 - c, dy = y + 0.5 - c;
+    if (dx * dx + dy * dy > rr) continue;
+    const i = (y * S + x) * 4;
+    const R = d[i], G = d[i + 1], B = d[i + 2];
+    if (R >= 252 || G >= 252 || B >= 252) clip++;
+    sr += LUT[R]; sg += LUT[G]; sb += LUT[B]; n++;
+  }
+  if (!n) return;
+  const cur = [sr / n, sg / n, sb / n];
+  clipFrac = clip / n;
+  const a = 0.2;
+  avg = avg ? avg.map((p, k) => p + (cur[k] - p) * a) : cur;
+
+  // Ring-Größe an angezeigtes Bild anpassen (object-fit: cover)
+  const box = $('#cam').getBoundingClientRect();
+  const scale = Math.max(box.width / vw, box.height / vh);
+  const px = 2 * r * scale;
+  const ring = $('#ring');
+  ring.style.width = ring.style.height = px + 'px';
+}
+
+function loop(t) {
+  if (!frozen) sample();
+  if (avg && t - lastUi > 120) { lastUi = t; render(); }
+  requestAnimationFrame(loop);
+}
+
+function warn() {
+  const w = $('#warn');
+  const mx = Math.max(...avg);
+  let text = '';
+  if (clipFrac > 0.03) text = 'Überbelichtet – auf eine Fläche messen, weiter weg gehen oder Belichtung runter';
+  else if (mx < 0.01) text = 'Zu dunkel für eine sinnvolle Messung';
+  w.textContent = text;
+  w.style.display = text ? 'block' : 'none';
+}
+
+function render() {
+  warn();
+  if (mode === 'cmp') renderCmp(); else renderScan();
+}
+
+function chroma(a) { const s = a[0] + a[1] + a[2] || 1e-9; return a.map(x => x / s); }
+function display(a) { const m = Math.max(...a) || 1e-9; return a.map(x => enc(x / m)); }
+
+function renderCmp() {
+  $('#swB').style.background = rgbCss(display(avg));
+  if (!refA) {
+    $('#swA').style.background = 'transparent';
+    $('#verdict').textContent = 'Noch keine Referenz gespeichert';
+    $('#verdict').className = 'verdict';
+    $('#cmpText').textContent = 'Scheinwerfer A auf die Fläche, dann „Aktuellen Wert als A speichern“ tippen.';
+    $('#bars').innerHTML = ''; $('#corr').textContent = ''; $('#bright').textContent = '';
+    return;
+  }
+  $('#swA').style.background = rgbCss(display(refA));
+  const ca = chroma(refA), cb = chroma(avg);
+  const diff = cb.map((x, i) => (x / ca[i] - 1) * 100);
+  const maxAbs = Math.max(...diff.map(Math.abs));
+  const vd = $('#verdict');
+  if (maxAbs < 2) {
+    vd.textContent = 'Farbe passt'; vd.className = 'verdict ok';
+    $('#cmpText').textContent = 'Abweichung unter 2 % in allen Kanälen.';
+  } else {
+    vd.className = 'verdict bad';
+    const parts = diff.map((x, i) => ({ x, i })).filter(o => Math.abs(o.x) >= 2).sort((p, q) => Math.abs(q.x) - Math.abs(p.x))
+      .map(o => (o.x > 0 ? 'zu viel ' : 'zu wenig ') + NAMES[o.i]);
+    vd.textContent = 'B hat ' + parts.join(', ');
+    $('#cmpText').textContent = 'Abweichung des Farbanteils von B gegenüber A:';
+  }
+  $('#bars').innerHTML = diff.map((x, i) => {
+    const w = Math.min(50, Math.abs(x) * 2.5);
+    const left = x >= 0 ? 50 : 50 - w;
+    return `<div class="bar"><span class="n">${NAMES[i]}</span><span class="t"><i style="left:${left}%;width:${w}%;background:${COLORS[i]}"></i></span><span class="val">${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)} %</span></div>`;
+  }).join('');
+  const k = ca.map((x, i) => x / cb[i]);
+  const km = Math.max(...k);
+  const corr = k.map(x => x / km * 100);
+  $('#corr').textContent = maxAbs < 2 ? '' :
+    'Vorschlag für B (bezogen auf die aktuellen Werte von B): ' + corr.map((x, i) => NAMES[i] + ' ' + pct(x)).join(' · ');
+  const sa = refA[0] + refA[1] + refA[2], sb = avg[0] + avg[1] + avg[2];
+  $('#bright').textContent = 'Helligkeit B: ' + pct(sb / sa * 100) + ' von A (nur aussagekräftig bei gleichem Abstand und gleicher Fläche).';
+}
+
+function renderScan() {
+  let c;
+  if (white) {
+    c = avg.map((x, i) => x / (white[i] || 1e-9));
+    $('#wState').textContent = 'Weißreferenz gespeichert. Neu messen, wenn sich das Licht ändert.';
+  } else {
+    const m = Math.max(...avg) || 1e-9;
+    c = avg.map(x => x / m);
+    $('#wState').textContent = 'Ohne Weißreferenz sind die Werte deutlich ungenauer. Weißes Blatt im selben Licht vor die Kamera halten und messen.';
+  }
+  const s = c.map(enc);
+  $('#swS').style.background = rgbCss(s);
+  $('#s255r').textContent = s[0]; $('#s255g').textContent = s[1]; $('#s255b').textContent = s[2];
+  $('#scmyc').textContent = Math.round(100 - s[0] / 2.55);
+  $('#scmym').textContent = Math.round(100 - s[1] / 2.55);
+  $('#scmyy').textContent = Math.round(100 - s[2] / 2.55);
+  $('#hex').textContent = 'HEX #' + s.map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+  const m = Math.max(...c) || 1e-9;
+  const p = c.map(x => Math.max(0, x / m * 100));
+  $('#pr').textContent = pct(p[0]); $('#pg').textContent = pct(p[1]); $('#pb').textContent = pct(p[2]);
+  $('#pc').textContent = pct(100 - p[0]); $('#pm').textContent = pct(100 - p[1]); $('#py').textContent = pct(100 - p[2]);
+}
+
+// UI
+$('#start').onclick = start;
+$('#freeze').onclick = () => {
+  frozen = !frozen;
+  $('#freeze').classList.toggle('on', frozen);
+  $('#freeze').textContent = frozen ? 'Weiter messen' : 'Einfrieren';
+  $('#frozenTag').style.display = frozen ? 'block' : 'none';
+};
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  mode = b.dataset.m;
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  $('#m-cmp').classList.toggle('hidden', mode !== 'cmp');
+  $('#m-scan').classList.toggle('hidden', mode !== 'scan');
+  if (avg) render();
+});
+$('#setA').onclick = () => { if (!avg) return; refA = avg.slice(); store.set('cm_refA', refA); render(); };
+$('#clrA').onclick = () => { refA = null; store.set('cm_refA', null); if (avg) render(); };
+$('#setW').onclick = () => {
+  if (!avg) return;
+  if (clipFrac > 0.03) { msg('Weißes Blatt ist überbelichtet – Belichtung runter oder Blatt weniger direkt anleuchten.'); return; }
+  msg(''); white = avg.slice(); store.set('cm_white', white); render();
+};
+$('#clrW').onclick = () => { white = null; store.set('cm_white', null); if (avg) render(); };
+})();
+</script>
+</body>
+</html>
